@@ -12,9 +12,11 @@
       max-width: 900px;
       margin: auto;
     }
+
     h1 {
       margin-bottom: 20px;
     }
+
     textarea {
       width: 100%;
       height: 100px;
@@ -23,7 +25,9 @@
       border: 1px solid #ccc;
       margin-bottom: 12px;
       font-size: 16px;
+      box-sizing: border-box;
     }
+
     button {
       padding: 10px 16px;
       border: none;
@@ -32,7 +36,9 @@
       border-radius: 8px;
       cursor: pointer;
       margin-bottom: 20px;
+      font-size: 16px;
     }
+
     .box {
       background: white;
       padding: 16px;
@@ -40,6 +46,7 @@
       border: 1px solid #ddd;
       margin-bottom: 20px;
       white-space: pre-wrap;
+      line-height: 1.5;
     }
   </style>
 </head>
@@ -53,45 +60,76 @@
   <div class="box" id="answer">Answer will appear here...</div>
 
   <script>
+    function normalizeText(text) {
+      return String(text || "").toLowerCase().replace(/[^\w\s]/g, " ");
+    }
+
+    function getWords(text) {
+      return normalizeText(text).split(/\s+/).filter(word => word.length > 2);
+    }
+
     function scoreText(text, questionWords) {
-      const lowerText = text.toLowerCase();
+      const lowerText = normalizeText(text);
       let score = 0;
+
       questionWords.forEach(word => {
-        if (word && lowerText.includes(word)) score++;
+        if (lowerText.includes(word)) score += 2;
       });
+
+      if (lowerText.includes("kyc") && questionWords.includes("kyc")) score += 5;
+      if (lowerText.includes("cams") && questionWords.includes("cams")) score += 5;
+      if (lowerText.includes("kfin") && questionWords.includes("kfin")) score += 5;
+      if (lowerText.includes("portfolio") && questionWords.includes("portfolio")) score += 5;
+      if (lowerText.includes("escalation") && questionWords.includes("escalation")) score += 3;
+
       return score;
     }
 
     function getBestContext(sheetData, docText, question) {
-      const questionWords = question.toLowerCase().split(/\s+/).filter(Boolean);
+      const questionWords = getWords(question);
 
       const sheetMatches = sheetData
-        .map(item => ({
-          text: JSON.stringify(item),
-          score: scoreText(JSON.stringify(item), questionWords)
-        }))
+        .map(item => {
+          const text = `
+Category: ${item.Category || ""}
+Type: ${item.Type || ""}
+Sub Type: ${item["Sub Type"] || ""}
+Pre-checks: ${item["Pre-checks"] || ""}
+Escalation Path: ${item["Escalation Path"] || ""}
+          `.trim();
+
+          return {
+            text,
+            score: scoreText(text, questionWords)
+          };
+        })
+        .filter(item => item.score > 0)
         .sort((a, b) => b.score - a.score)
-        .slice(0, 3)
+        .slice(0, 2)
         .map(item => item.text);
 
-      const docSections = docText.split(/\n\s*\n/).filter(Boolean);
+      const docSections = docText
+        .split(/\n\s*\n/)
+        .map(x => x.trim())
+        .filter(Boolean);
 
       const docMatches = docSections
         .map(section => ({
           text: section,
           score: scoreText(section, questionWords)
         }))
+        .filter(item => item.score > 0)
         .sort((a, b) => b.score - a.score)
-        .slice(0, 5)
+        .slice(0, 2)
         .map(item => item.text);
 
       return `
-SHEET MATCHES:
+Top sheet matches:
 ${sheetMatches.join("\n\n")}
 
-DOC MATCHES:
+Top doc matches:
 ${docMatches.join("\n\n")}
-`;
+      `.trim();
     }
 
     async function askAI() {
@@ -117,7 +155,7 @@ ${docMatches.join("\n\n")}
           question
         );
 
-        statusBox.textContent = "Asking AI with filtered context...";
+        statusBox.textContent = "Asking AI...";
 
         const aiRes = await fetch("/api/ask", {
           method: "POST",
@@ -132,7 +170,7 @@ ${docMatches.join("\n\n")}
 
         const aiData = await aiRes.json();
 
-        statusBox.textContent = "Done.";
+        statusBox.textContent = aiData.cached ? "Done (cached)." : "Done.";
         answerBox.textContent = aiData.answer || aiData.error || "No response.";
       } catch (error) {
         statusBox.textContent = "Error.";
