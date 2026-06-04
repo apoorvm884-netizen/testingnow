@@ -1,3 +1,5 @@
+const cache = new Map();
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -5,6 +7,14 @@ export default async function handler(req, res) {
 
   try {
     const { question, context } = req.body;
+    const cacheKey = question.trim().toLowerCase() + "::" + context.slice(0, 500);
+
+    if (cache.has(cacheKey)) {
+      return res.status(200).json({
+        answer: cache.get(cacheKey),
+        cached: true
+      });
+    }
 
     const response = await fetch("https://router.huggingface.co/v1/chat/completions", {
       method: "POST",
@@ -17,14 +27,14 @@ export default async function handler(req, res) {
         messages: [
           {
             role: "system",
-            content: "You are a company support assistant. Answer only from the provided context. Give a short, direct answer in 1 to 3 short lines only. Do not explain too much. Do not copy full paragraphs. If helpful, give only 2 or 3 action steps. If the answer is not found, say exactly: I could not find that in the support manual."
+            content: "You are a company support assistant. Answer only from the provided context. Keep the answer short, clear, and human. Use this exact format: Issue: <one short line> Action: <2 or 3 short steps> Escalation: <Yes or No, and where if needed>. If the answer is not found, say exactly: I could not find that in the support manual."
           },
           {
             role: "user",
-            content: `Context:\n${context}\n\nQuestion:\n${question}\n\nReply in very short human wording. Maximum 60 words.`
+            content: `Context:\n${context}\n\nQuestion:\n${question}`
           }
         ],
-        max_tokens: 120,
+        max_tokens: 140,
         temperature: 0.2
       })
     });
@@ -41,7 +51,12 @@ export default async function handler(req, res) {
       data.choices?.[0]?.message?.content?.trim() ||
       "No answer returned.";
 
-    return res.status(200).json({ answer });
+    cache.set(cacheKey, answer);
+
+    return res.status(200).json({
+      answer,
+      cached: false
+    });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
