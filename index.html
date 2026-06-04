@@ -53,6 +53,47 @@
   <div class="box" id="answer">Answer will appear here...</div>
 
   <script>
+    function scoreText(text, questionWords) {
+      const lowerText = text.toLowerCase();
+      let score = 0;
+      questionWords.forEach(word => {
+        if (word && lowerText.includes(word)) score++;
+      });
+      return score;
+    }
+
+    function getBestContext(sheetData, docText, question) {
+      const questionWords = question.toLowerCase().split(/\s+/).filter(Boolean);
+
+      const sheetMatches = sheetData
+        .map(item => ({
+          text: JSON.stringify(item),
+          score: scoreText(JSON.stringify(item), questionWords)
+        }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 3)
+        .map(item => item.text);
+
+      const docSections = docText.split(/\n\s*\n/).filter(Boolean);
+
+      const docMatches = docSections
+        .map(section => ({
+          text: section,
+          score: scoreText(section, questionWords)
+        }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5)
+        .map(item => item.text);
+
+      return `
+SHEET MATCHES:
+${sheetMatches.join("\n\n")}
+
+DOC MATCHES:
+${docMatches.join("\n\n")}
+`;
+    }
+
     async function askAI() {
       const question = document.getElementById("question").value.trim();
       const statusBox = document.getElementById("status");
@@ -64,14 +105,19 @@
       }
 
       statusBox.textContent = "Loading support data...";
+      answerBox.textContent = "";
 
       try {
-        const dataRes = await fetch("https://script.google.com/macros/s/AKfycbxeghc1dOMxuc1KSVIcWnIOA56Qd_TLACBKgomurRxr21H5R9-GSZllkd1p6H9NPr0c/exec");
-        const sheetData = await dataRes.json();
+        const dataRes = await fetch("https://script.google.com/macros/s/AKfycbzXO8jiY2fo4WEpXG53jcm4pNWYTtZCrnBPgQx--TVzYETdmthEsuuaVpMIZq6wHP1Z/exec");
+        const supportData = await dataRes.json();
 
-        const context = JSON.stringify(sheetData.data);
+        const context = getBestContext(
+          supportData.sheetData || [],
+          supportData.docText || "",
+          question
+        );
 
-        statusBox.textContent = "Asking AI...";
+        statusBox.textContent = "Asking AI with filtered context...";
 
         const aiRes = await fetch("/api/ask", {
           method: "POST",
