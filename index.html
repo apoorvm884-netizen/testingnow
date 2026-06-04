@@ -3,15 +3,26 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Support Manual Test</title>
+  <title>Support AI Assistant</title>
   <style>
     body {
       font-family: Arial, sans-serif;
       padding: 20px;
       background: #f5f5f5;
+      max-width: 900px;
+      margin: auto;
     }
     h1 {
       margin-bottom: 20px;
+    }
+    textarea {
+      width: 100%;
+      height: 100px;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid #ccc;
+      margin-bottom: 12px;
+      font-size: 16px;
     }
     button {
       padding: 10px 16px;
@@ -22,33 +33,64 @@
       cursor: pointer;
       margin-bottom: 20px;
     }
-    pre {
+    .box {
       background: white;
       padding: 16px;
       border-radius: 10px;
-      overflow: auto;
-      white-space: pre-wrap;
-      word-wrap: break-word;
       border: 1px solid #ddd;
+      margin-bottom: 20px;
+      white-space: pre-wrap;
     }
   </style>
 </head>
 <body>
-  <h1>Support Manual Test</h1>
-  <button onclick="loadData()">Load Sheet Data</button>
-  <pre id="output">Click the button to load data...</pre>
+  <h1>Support AI Assistant</h1>
+
+  <textarea id="question" placeholder="Type your question here... Example: customer is facing KYC issue"></textarea>
+  <button onclick="askAI()">Ask AI</button>
+
+  <div class="box" id="status">Status: Waiting...</div>
+  <div class="box" id="answer">Answer will appear here...</div>
 
   <script>
-    async function loadData() {
-      const output = document.getElementById("output");
-      output.textContent = "Loading...";
+    async function askAI() {
+      const question = document.getElementById("question").value.trim();
+      const statusBox = document.getElementById("status");
+      const answerBox = document.getElementById("answer");
+
+      if (!question) {
+        answerBox.textContent = "Please type a question first.";
+        return;
+      }
+
+      statusBox.textContent = "Loading support data...";
 
       try {
-        const res = await fetch("https://script.google.com/macros/s/AKfycbxeghc1dOMxuc1KSVIcWnIOA56Qd_TLACBKgomurRxr21H5R9-GSZllkd1p6H9NPr0c/exec");
-        const data = await res.json();
-        output.textContent = JSON.stringify(data, null, 2);
+        const dataRes = await fetch("https://script.google.com/macros/s/AKfycbxeghc1dOMxuc1KSVIcWnIOA56Qd_TLACBKgomurRxr21H5R9-GSZllkd1p6H9NPr0c/exec");
+        const sheetData = await dataRes.json();
+
+        const context = JSON.stringify(sheetData.data);
+
+        statusBox.textContent = "Asking AI...";
+
+        const aiRes = await fetch("/api/ask", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            question,
+            context
+          })
+        });
+
+        const aiData = await aiRes.json();
+
+        statusBox.textContent = "Done.";
+        answerBox.textContent = aiData.answer || aiData.error || "No response.";
       } catch (error) {
-        output.textContent = "Error: " + error.message;
+        statusBox.textContent = "Error.";
+        answerBox.textContent = error.message;
       }
     }
   </script>
