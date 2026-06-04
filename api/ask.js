@@ -6,46 +6,39 @@ export default async function handler(req, res) {
   try {
     const { question, context } = req.body;
 
-    const prompt = `
-You are a support assistant.
-Answer only from the given support manual data.
-If the answer is not found in the data, say: I could not find that in the support manual.
-
-Support manual data:
-${context}
-
-User question:
-${question}
-`;
-
-    const hfRes = await fetch("https://router.huggingface.co/hf-inference/models/google/flan-t5-base", {
+    const response = await fetch("https://router.huggingface.co/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${process.env.HF_API_TOKEN}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        inputs: prompt
+        model: "moonshotai/Kimi-K2-Instruct-0905",
+        messages: [
+          {
+            role: "system",
+            content: "You are a support assistant. Answer only from the provided support manual data. If the answer is not found, say: I could not find that in the support manual."
+          },
+          {
+            role: "user",
+            content: `Support manual data:\n${context}\n\nUser question:\n${question}`
+          }
+        ],
+        max_tokens: 300
       })
     });
 
-    const data = await hfRes.json();
+    const data = await response.json();
 
-    if (!hfRes.ok) {
+    if (!response.ok) {
       return res.status(500).json({
-        error: data.error || "Hugging Face request failed"
+        error: data.error?.message || data.error || "Hugging Face request failed"
       });
     }
 
-    let answer = "No answer returned.";
-
-    if (Array.isArray(data) && data[0] && data[0].generated_text) {
-      answer = data[0].generated_text;
-    } else if (data.generated_text) {
-      answer = data.generated_text;
-    } else {
-      answer = JSON.stringify(data);
-    }
+    const answer =
+      data.choices?.[0]?.message?.content ||
+      "No answer returned.";
 
     return res.status(200).json({ answer });
   } catch (error) {
