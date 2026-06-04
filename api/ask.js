@@ -17,14 +17,15 @@ export default async function handler(req, res) {
         messages: [
           {
             role: "system",
-            content: "You are a support assistant. Answer only from the provided support manual data. If the answer is not found, say: I could not find that in the support manual."
+            content: "You are a company support assistant. Answer only from the provided context. Give a short, direct answer in 1 to 3 short lines only. Do not explain too much. Do not copy full paragraphs. If helpful, give only 2 or 3 action steps. If the answer is not found, say exactly: I could not find that in the support manual."
           },
           {
             role: "user",
-            content: `Support manual data:\n${context}\n\nUser question:\n${question}`
+            content: `Context:\n${context}\n\nQuestion:\n${question}\n\nReply in very short human wording. Maximum 60 words.`
           }
         ],
-        max_tokens: 300
+        max_tokens: 120,
+        temperature: 0.2
       })
     });
 
@@ -37,7 +38,7 @@ export default async function handler(req, res) {
     }
 
     const answer =
-      data.choices?.[0]?.message?.content ||
+      data.choices?.[0]?.message?.content?.trim() ||
       "No answer returned.";
 
     return res.status(200).json({ answer });
