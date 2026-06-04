@@ -9,7 +9,7 @@ export default async function handler(req, res) {
     const prompt = `
 You are a support assistant.
 Answer only from the given support manual data.
-If the answer is not found in the data, say "I could not find that in the support manual."
+If the answer is not found in the data, say: I could not find that in the support manual.
 
 Support manual data:
 ${context}
@@ -18,7 +18,7 @@ User question:
 ${question}
 `;
 
-    const hfRes = await fetch("https://api-inference.huggingface.co/models/google/flan-t5-large", {
+    const hfRes = await fetch("https://router.huggingface.co/hf-inference/models/google/flan-t5-base", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${process.env.HF_API_TOKEN}`,
@@ -31,13 +31,20 @@ ${question}
 
     const data = await hfRes.json();
 
+    if (!hfRes.ok) {
+      return res.status(500).json({
+        error: data.error || "Hugging Face request failed"
+      });
+    }
+
     let answer = "No answer returned.";
-    if (Array.isArray(data) && data[0]?.generated_text) {
+
+    if (Array.isArray(data) && data[0] && data[0].generated_text) {
       answer = data[0].generated_text;
-    } else if (data?.generated_text) {
+    } else if (data.generated_text) {
       answer = data.generated_text;
-    } else if (data?.error) {
-      answer = "HF Error: " + data.error;
+    } else {
+      answer = JSON.stringify(data);
     }
 
     return res.status(200).json({ answer });
